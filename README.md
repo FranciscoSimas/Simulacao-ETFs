@@ -98,7 +98,3 @@ Após a execução, o script imprime:
 * Pode definir um limite máximo para a contribuição mensal, útil quando há aumentos periódicos.
 * Para reprodutibilidade de retornos personalizados, a função `simulation` aceita `seed`, embora não haja pergunta para isso na interface interativa.
 
-```
-
-Se quiseres, posso também fazer **uma versão ainda mais curta**, com tudo em poucas secções, ideal para um README minimalista. Quer que eu faça?
-```
