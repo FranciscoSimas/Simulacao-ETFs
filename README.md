@@ -1,100 +1,101 @@
-# Simulação de Portefólio ETF
+# ETF Portfolio Simulation
 
-## Visão geral
-Script interativo em Python que simula a evolução de um portefólio com aportes anuais e rendimentos anuais (personalizados ou baseados no histórico do S&P500). Suporta duas estratégias de retirada:
+## Overview
+Interactive Python script that simulates the evolution of a portfolio with annual contributions and annual returns (customized or based on historical S&P500 data). Supports two withdrawal strategies:
 
-1. **Valor Fixo** (com opção de “dobrar retiradas” acima de um teto)  
-2. **4% Anual (líquido)**, a partir do momento em que atinge o target  
+1. **Fixed Amount** (with an option to “double withdrawals” above a set cap)  
+2. **4% Annual (net)**, starting once the target is reached  
 
-## Requisitos
+## Requirements
 - Python 3.8+  
-- Bibliotecas: `numpy`, `pandas`
+- Libraries: `numpy`, `pandas`
 
-## Como executar
-Execute o script no terminal:
+## How to run
+Run the script in the terminal:
 
 ```bash
 python Simulacao_Interativa_2.py
 ````
-Ou colar e correr num compiler como o https://www.online-python.com/
 
-## Fluxo de perguntas (passo a passo)
+Or copy and run it in an online compiler like [https://www.online-python.com/](https://www.online-python.com/)
 
-### 1) Tipo de simulação
+## Question Flow (Step by Step)
 
-* `1` — Retornos personalizados (média/desvio)
-* `2` — Histórico real do S\&P500
+### 1) Type of simulation
 
-### 2) Estratégia de retirada
+* `1` — Custom returns (mean/std deviation)
+* `2` — Historical S\&P500 data
 
-* `1` — Valor fixo
-* `2` — 4% Anual (líquido)
+### 2) Withdrawal strategy
 
-### 3) Perguntas comuns (sempre feitas)
+* `1` — Fixed amount
+* `2` — 4% Annual (net)
 
-* Quantos anos quer simular?
-* Capital inicial (€)
-* Contribuição mensal inicial (14/ano) (€)
-* Crescimento anual das contribuições (ex: 0.02 para 2%)
-* Target para começar a retirar dinheiro (€)
-* Limite mínimo para poder retirar (€)
+### 3) Common questions (always asked)
 
-  * Protege o capital: se o saldo ficar abaixo deste limite, não há retirada naquele ano.
+* How many years do you want to simulate?
+* Initial capital (€)
+* Initial monthly contribution (14/year) (€)
+* Annual contribution growth (e.g., 0.02 for 2%)
+* Target to start withdrawing money (€)
+* Minimum threshold to allow withdrawals (€)
 
-### 4) Perguntas específicas por estratégia
+  * Protects capital: if the balance falls below this threshold, no withdrawal occurs that year.
 
-* **Se escolher 1 — Valor fixo:**
+### 4) Strategy-specific questions
 
-  * Valor para dobrar retiradas (€)
+* **If you choose 1 — Fixed amount:**
 
-    * Se o saldo atingir este teto, o valor líquido anual de retirada é dobrado naquele ano.
-  * Valor líquido anual inicial para retirar (€)
+  * Amount to double withdrawals (€)
 
-    * Base do valor líquido desejado; pode crescer conforme `withdrawal_growth_rate` definido na função (padrão 0%).
+    * If the balance reaches this cap, the annual net withdrawal is doubled that year.
+  * Initial annual net withdrawal (€)
 
-* **Se escolher 2 — 4% Anual (líquido):**
+    * Base of the desired net withdrawal; may grow according to the `withdrawal_growth_rate` defined in the function (default 0%).
 
-  * Nada adicional é perguntado aqui.
-  * Ao atingir o target, retira-se 4% líquido do saldo de início do ano de retirada. O valor acompanha o crescimento do portefólio.
+* **If you choose 2 — 4% Annual (net):**
 
-### 5) Impostos e progressão de contribuições
+  * No additional questions are asked here.
+  * Once the target is reached, withdraw 4% net of the starting balance of the withdrawal year. The amount grows with the portfolio.
 
-* Taxa de imposto sobre mais‑valias (ex: 0.198 para 19.8%)
+### 5) Taxes and contribution progression
 
-  * O imposto incide sobre as mais‑valias na retirada; o script calcula o bruto necessário para atingir o líquido desejado.
-* De quanto em quanto tempo aumentar contribuição anual (anos)
+* Capital gains tax rate (e.g., 0.198 for 19.8%)
 
-  * Intervalo (em anos) para subir a contribuição mensal.
-* Aumento do valor mensal (€)
+  * The tax applies to capital gains on withdrawals; the script calculates the gross amount needed to achieve the desired net.
+* Contribution increase interval (years)
 
-  * Quanto a contribuição mensal aumenta a cada intervalo.
-* Limite máximo da contribuição mensal (€)
+  * Interval (in years) to increase monthly contributions.
+* Monthly contribution increase (€)
 
-  * Teto para a contribuição mensal após os aumentos.
+  * How much the monthly contribution increases at each interval.
+* Maximum monthly contribution (€)
 
-### 6) Parâmetros adicionais (apenas para “Retornos personalizados”)
+  * Cap for the monthly contribution after increases.
 
-* Média de retorno anual esperado (ex: 0.07 para 7%)
-* Desvio padrão do retorno (ex: 0.15 para 15%)
+### 6) Additional parameters (only for “Custom returns”)
 
-## Como interpretar os resultados
+* Expected annual return (e.g., 0.07 for 7%)
+* Standard deviation of returns (e.g., 0.15 for 15%)
 
-Após a execução, o script imprime:
+## How to interpret results
 
-* `Fase de retirada inicia no ano: X`
-* Uma tabela anual com colunas principais:
+After running the script, it prints:
 
-  * Ano, Fase, Saldo início (€), Contribuição (€), Retirada (€), Retirada líquida (€), Crescimento (%), Saldo final (€)
-* `Total retirado ao longo dos anos (valor líquido): … €`
+* `Withdrawal phase starts in year: X`
+* An annual table with main columns:
 
-**Notas:**
+  * Year, Phase, Starting balance (€), Contribution (€), Withdrawal (€), Net withdrawal (€), Growth (%), Ending balance (€)
+* `Total withdrawn over the years (net): … €`
 
-* “Crescimento (%)” já considera a taxa de gestão anual subtraída dos retornos.
-* Na estratégia 2 (4% Anual), o valor líquido de retirada é sempre 4% do saldo (respeitando o limite mínimo).
-* Na estratégia 1, o “dobrar retiradas” aplica-se quando o saldo atinge o teto definido.
+**Notes:**
 
-## Observações
+* “Growth (%)” already accounts for the annual management fee deducted from returns.
+* In strategy 2 (4% Annual), the net withdrawal is always 4% of the balance (respecting the minimum threshold).
+* In strategy 1, the “double withdrawals” rule applies when the balance reaches the defined cap.
 
-* Pode definir um limite máximo para a contribuição mensal, útil quando há aumentos periódicos.
-* Para reprodutibilidade de retornos personalizados, a função `simulation` aceita `seed`, embora não haja pergunta para isso na interface interativa.
+## Observations
+
+* You can set a maximum limit for the monthly contribution, useful when there are periodic increases.
+* For reproducibility of custom returns, the `simulation` function accepts a `seed`, although this is not asked in the interactive interface.
 
