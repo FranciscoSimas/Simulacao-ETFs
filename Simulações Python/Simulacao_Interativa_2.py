@@ -28,7 +28,8 @@ def simulation(
     contribution_step_up_amount=100,
     max_monthly_contribution=None,
     withdrawal_strategy=1,  # 1 = Valor fixo, 2 = 4% anual líquido
-    seed=None
+    seed=None,
+    returns_input_frequency="annual"  # "annual" or "monthly" for custom returns
 ):
     # Histórico real do S&P500 (1969–2024)
     sp500_returns = [
@@ -50,65 +51,54 @@ def simulation(
     total_withdrawn = 0.0
     total_contributions = 0.0
 
-    for year in range(1, total_years + 1):
-        data = {}
-        data["Ano"] = year
-        data["Fase"] = phase
-        data["Saldo inicio (€)"] = round(portfolio, 2)
+    # Preparar fatores mensais
+    def annual_to_monthly_rate(r_annual: float) -> float:
+        return (1.0 + r_annual) ** (1.0 / 12.0) - 1.0
 
-        # Aportes
-        increment_periods = (year - 1) // contribution_step_up_interval
-        adjusted_monthly_contribution = initial_monthly_contribution + (contribution_step_up_amount * increment_periods)
-        if max_monthly_contribution is not None:
-            adjusted_monthly_contribution = min(adjusted_monthly_contribution, max_monthly_contribution)
+    # Converter comissão de gestão anual para equivalente mensal (como fator negativo)
+    monthly_fee_rate = (1.0 - management_fee) ** (1.0 / 12.0) - 1.0  # valor negativo
 
-        annual_contribution = adjusted_monthly_contribution * contribution_multiplier
-        annual_contribution *= (1 + contribution_growth_rate) ** (year - 1)
+    months_total = total_years * 12
+    year = 1
+    month_in_year = 1
 
-        # Transição para retirada
+    # Valores anuais agregados
+    year_start_balance = portfolio
+    year_contrib = 0.0
+    year_withdraw_gross = 0.0
+    year_withdraw_net = 0.0
+    year_growth_factor = 1.0
+
+    # Definir contribuição mensal para o ano 1
+    increment_periods = (year - 1) // contribution_step_up_interval
+    adjusted_monthly_contribution = initial_monthly_contribution + (contribution_step_up_amount * increment_periods)
+    if max_monthly_contribution is not None:
+        adjusted_monthly_contribution = min(adjusted_monthly_contribution, max_monthly_contribution)
+    adjusted_monthly_contribution *= (1 + contribution_growth_rate) ** (year - 1)
+    monthly_contribution = adjusted_monthly_contribution * (contribution_multiplier / 12.0)
+
+    for m in range(1, months_total + 1):
+        # Transição para retirada quando atingir target (verificado mensalmente)
         if phase == "Acumulação" and portfolio >= target_portfolio:
             phase = "Retirada"
-            withdrawal_start_year = year
+            withdrawal_start_year = year if withdrawal_start_year is None else withdrawal_start_year
             current_withdrawal_net = withdrawal_base
-            data["Fase"] = phase
 
-        if phase == "Acumulação":
-            data["Contribuição (€)"] = round(annual_contribution, 2)
-            data["Retirada (€)"] = round(0.0, 2)
-            data["Retirada líquida (€)"] = round(0.0, 2)
-            portfolio += annual_contribution
-            total_contributions += annual_contribution
+        # Contribuições mensais
+        this_contribution = monthly_contribution if (phase == "Acumulação" or continue_contributions_during_withdrawal) else 0.0
+        if this_contribution > 0:
+            portfolio += this_contribution
+            total_contributions += this_contribution
+            year_contrib += this_contribution
 
-            if mode == 1:
-                annual_return = np.random.normal(loc=mean_return, scale=std_return)
-            else:
-                annual_return = sp500_returns[(year - 1) % len(sp500_returns)] / 100
-
-            effective_return = annual_return - management_fee
-            portfolio *= (1 + effective_return)
-            data["Crescimento (%)"] = f"{format_number_pt(effective_return * 100, 2)} %"
-
-        else:  # fase de retirada
-            this_contribution = annual_contribution if continue_contributions_during_withdrawal else 0.0
-            data["Contribuição (€)"] = round(this_contribution, 2)
-
-            if continue_contributions_during_withdrawal:
-                portfolio += this_contribution
-                total_contributions += this_contribution
-
-            if portfolio < min_threshold:
-                data["Retirada (€)"] = round(0.0, 2)
-                data["Retirada líquida (€)"] = round(0.0, 2)
-            else:
-                # Definição do líquido desejado conforme estratégia
+        # Retirada apenas uma vez por ano (no 1º mês do ano civil)
+        if phase == "Retirada" and month_in_year == 1:
+            if portfolio >= min_threshold:
                 if withdrawal_strategy == 1:
-                    desired_net = current_withdrawal_net
-                    if portfolio >= upper_threshold:
-                        desired_net *= 2
-                else:  # 4% anual líquido
+                    desired_net = current_withdrawal_net * (2.0 if portfolio >= upper_threshold else 1.0)
+                else:
                     desired_net = 0.04 * portfolio
 
-                # Cálculo para obter bruto tal que o líquido = desired_net (imposto só sobre mais-valias)
                 capital_ratio = min(1.0, total_contributions / portfolio) if portfolio > 0 else 1.0
                 gross_withdrawal = desired_net / (1 - tax_rate_withdrawal * (1 - capital_ratio))
                 capital_withdrawn = gross_withdrawal * capital_ratio
@@ -118,24 +108,64 @@ def simulation(
 
                 portfolio -= gross_withdrawal
                 total_withdrawn += net_withdrawal
-                data["Retirada (€)"] = round(gross_withdrawal, 2)
-                data["Retirada líquida (€)"] = round(net_withdrawal, 2)
+                year_withdraw_gross += gross_withdrawal
+                year_withdraw_net += net_withdrawal
 
-                # Atualiza apenas para estratégia de valor fixo
                 if withdrawal_strategy == 1:
                     current_withdrawal_net *= (1 + withdrawal_growth_rate)
-
-            if mode == 1:
-                annual_return = np.random.normal(loc=mean_return, scale=std_return)
             else:
-                annual_return = sp500_returns[(year - 1) % len(sp500_returns)] / 100
+                # Sem retirada este ano porque ficou abaixo do mínimo
+                pass
 
-            effective_return = annual_return - management_fee
-            portfolio *= (1 + effective_return)
-            data["Crescimento (%)"] = f"{format_number_pt(effective_return * 100, 2)} %"
+        # Retornos mensais
+        if mode == 1:
+            if returns_input_frequency == "monthly":
+                monthly_return = np.random.normal(loc=mean_return, scale=std_return)
+            else:  # annual input -> converter para mensal e sortear em base mensal
+                monthly_mean = annual_to_monthly_rate(mean_return)
+                monthly_std = std_return / np.sqrt(12.0)
+                monthly_return = np.random.normal(loc=monthly_mean, scale=monthly_std)
+        else:
+            annual_r = sp500_returns[(year - 1) % len(sp500_returns)] / 100.0
+            monthly_return = annual_to_monthly_rate(annual_r)
 
-        data["Saldo final (€)"] = round(portfolio, 2)
-        results.append(data)
+        # Aplicar comissão mensal como fator
+        monthly_effective_factor = (1.0 + monthly_return) * (1.0 + monthly_fee_rate)
+        portfolio *= monthly_effective_factor
+        year_growth_factor *= monthly_effective_factor
+
+        # Fecho do ano: criar linha agregada
+        if month_in_year == 12:
+            data = {}
+            data["Ano"] = year
+            data["Fase"] = phase
+            data["Saldo inicio (€)"] = round(year_start_balance, 2)
+            data["Contribuição (€)"] = round(year_contrib, 2)
+            data["Retirada (€)"] = round(year_withdraw_gross, 2)
+            data["Retirada líquida (€)"] = round(year_withdraw_net, 2)
+            effective_annual_growth = year_growth_factor - 1.0
+            data["Crescimento (%)"] = f"{format_number_pt(effective_annual_growth * 100, 2)} %"
+            data["Saldo final (€)"] = round(portfolio, 2)
+            results.append(data)
+
+            # Preparar próximo ano
+            year += 1
+            month_in_year = 0
+            year_start_balance = portfolio
+            year_contrib = 0.0
+            year_withdraw_gross = 0.0
+            year_withdraw_net = 0.0
+            year_growth_factor = 1.0
+
+            # Atualizar contribuição mensal do novo ano
+            increment_periods = (year - 1) // contribution_step_up_interval
+            adjusted_monthly_contribution = initial_monthly_contribution + (contribution_step_up_amount * increment_periods)
+            if max_monthly_contribution is not None:
+                adjusted_monthly_contribution = min(adjusted_monthly_contribution, max_monthly_contribution)
+            adjusted_monthly_contribution *= (1 + contribution_growth_rate) ** (year - 1)
+            monthly_contribution = adjusted_monthly_contribution * (contribution_multiplier / 12.0)
+
+        month_in_year += 1
 
     df = pd.DataFrame(results)
 
@@ -185,10 +215,23 @@ contribution_step_up_amount = float(input("Aumento do valor mensal (€): "))
 max_monthly_contribution = float(input("Limite máximo da contribuição mensal (€): "))
 
 if mode == 1:
-    mean_return = float(input("Média de retorno anual esperado (ex: 0.07 para 7%): "))
-    std_return = float(input("Desvio padrão do retorno (ex: 0.15 para 15%): "))
+    print("""
+Pretende inserir retornos ANUAIS ou MENSAIS?
+1 - Anuais (ex: média 0.07 = 7% ao ano)
+2 - Mensais (ex: média 0.006 = 0.6% ao mês)
+""")
+    ret_freq_opt = int(input("Opção: "))
+    if ret_freq_opt == 2:
+        returns_input_frequency = "monthly"
+        mean_return = float(input("Média de retorno MENSAL esperada (ex: 0.006 para 0.6%): "))
+        std_return = float(input("Desvio padrão do retorno MENSAL (ex: 0.03 para 3%): "))
+    else:
+        returns_input_frequency = "annual"
+        mean_return = float(input("Média de retorno ANUAL esperada (ex: 0.07 para 7%): "))
+        std_return = float(input("Desvio padrão do retorno ANUAL (ex: 0.15 para 15%): "))
 else:
     mean_return, std_return = 0, 0
+    returns_input_frequency = "annual"
 
 df_results, start_withdrawal, total_withdrawn = simulation(
     mode,
@@ -207,7 +250,8 @@ df_results, start_withdrawal, total_withdrawn = simulation(
     contribution_step_up_interval=contribution_step_up_interval,
     contribution_step_up_amount=contribution_step_up_amount,
     max_monthly_contribution=max_monthly_contribution,
-    withdrawal_strategy=withdrawal_strategy
+    withdrawal_strategy=withdrawal_strategy,
+    returns_input_frequency=returns_input_frequency
 )
 
 print("\n================ RESULTADOS ================\n")
